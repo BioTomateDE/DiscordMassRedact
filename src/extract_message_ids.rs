@@ -39,7 +39,7 @@ pub fn extract_message_ids(directory: &PathBuf) -> Result<HashMap<u64, Vec<u64>>
         }
         let folder_name: &str = folder_name_chars.as_str();     // remove the leading c
         let channel_id: u64 = folder_name.parse()
-            .map_err(|e| format!("{FOLDER_NAME_ERR_MSG} Folder name does start with 'c' but is not followed by a number: {folder_name}"))?;
+            .map_err(|_| format!("{FOLDER_NAME_ERR_MSG} Folder name does start with 'c' but is not followed by a number: {folder_name}"))?;
 
         channels.insert(channel_id, message_ids);
     }

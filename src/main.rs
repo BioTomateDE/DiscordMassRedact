@@ -27,7 +27,6 @@ fn main() -> Result<(), String> {
     let channels: HashMap<u64, Vec<u64>> = extract_message_ids(&messages_directory)?;
     println!("Got {} messages in {} channels.", count_messages(&channels), channels.len());
     
-    
     for (channel_id, message_ids) in &channels {
         for message_id in message_ids {
             let redacted_message: String = generate_redacted();
