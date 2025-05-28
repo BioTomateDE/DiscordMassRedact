@@ -1,9 +1,18 @@
 use rand::prelude::IndexedRandom;
 use rand::{random_bool, rng};
-use crate::{capitalize, wordlist};
 use crate::emojis::EMOJIS;
+use crate::wordlist::WORDLIST;
 
-fn generate_redacted() -> String {
+fn capitalize(s: &str) -> String {
+    let mut c = s.chars();
+    match c.next() {
+        None => String::new(),
+        Some(f) => f.to_uppercase().chain(c).collect(),
+    }
+}
+
+
+pub fn generate_redacted() -> String {
     let word_count: usize = rand::random_range(4..20);
     let mut buf: String = String::with_capacity(word_count * 8); // Pre-allocate space
 
@@ -13,7 +22,7 @@ fn generate_redacted() -> String {
     for _ in 0..word_count {
         // Choose word with occasional misspelling
         let mut word: String = if random_bool(0.03) {
-            let mut w: String = wordlist::WORDLIST.choose(&mut rng()).unwrap().to_string();
+            let mut w: String = WORDLIST.choose(&mut rng()).unwrap().to_string();
             // Simple misspelling by adding/removing/changing a character
             let pos = rand::random_range(0..w.len());
             match rand::random_range(0..3) {
@@ -23,12 +32,12 @@ fn generate_redacted() -> String {
             }
             w
         } else {
-            wordlist::WORDLIST.choose(&mut rng()).unwrap().to_string()
+            WORDLIST.choose(&mut rng()).unwrap().to_string()
         };
 
         // Capitalization logic
         if can_capitalize {
-            if random_bool(0.15) || sentence_length == 0 {
+            if random_bool(if sentence_length == 0 {0.19} else {0.08}) {
                 word = capitalize(&word);
                 can_capitalize = false;
             }
