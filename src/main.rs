@@ -42,12 +42,12 @@ fn main() -> Result<(), String> {
             let redacted_message: String = generate_redacted();
             match edit_message(&client, &token, *channel_id, *message_id, &redacted_message) {
                 Ok(_) => {}
-                Err(e) => {
+                Err((e, retry_after)) => {
                     println!("{}", format!("Error while editing message: {e}").red());
-                    sleep(Duration::from_millis(6000));
+                    sleep(Duration::from_secs_f64(retry_after * 1.2));
                 }
             };
-            sleep(Duration::from_millis(2000));
+            sleep(Duration::from_millis(3000));
         }
     }
 
