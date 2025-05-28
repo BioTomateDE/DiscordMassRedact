@@ -6,7 +6,7 @@ use reqwest::StatusCode;
 
 pub fn edit_message(client: &Client, token: &str, channel_id: u64, message_id: u64, content: &str) -> Result<(), String> {
     let url: Url = Url::from_str(&format!("https://discord.com/api/v9/channels/{channel_id}/messages/{message_id}"))
-        .map_err(|e| format!("Could not generate URL for channel id \"{channel_id}\" and message id \"{message_id}\": {e}"))?;;
+        .map_err(|e| format!("Could not generate URL for channel id \"{channel_id}\" and message id \"{message_id}\": {e}"))?;
 
     let response: Response = client
         .patch(url)

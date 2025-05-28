@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::fmt::format;
 use std::path::PathBuf;
 use std::thread::sleep;
 use std::time::Duration;
