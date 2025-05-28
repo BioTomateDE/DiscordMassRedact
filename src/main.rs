@@ -1,5 +1,10 @@
 use std::collections::HashMap;
+use std::fmt::format;
 use std::path::PathBuf;
+use std::thread::sleep;
+use std::time::Duration;
+use colored::Colorize;
+use reqwest::blocking::Client;
 use crate::edit_message::edit_message;
 use crate::extract_message_ids::extract_message_ids;
 use crate::redact::generate_redacted;
@@ -25,16 +30,29 @@ fn main() -> Result<(), String> {
     let token: String = std::env::var("DISCORD_TOKEN").map_err(|_| "Environment variable DISCORD_TOKEN not set")?;
 
     let channels: HashMap<u64, Vec<u64>> = extract_message_ids(&messages_directory)?;
-    println!("Got {} messages in {} channels.", count_messages(&channels), channels.len());
+    println!("{}", format!("Got {} messages in {} channels.\n", count_messages(&channels), channels.len()).bright_purple());
     
+    let client: Client = Client::builder()
+        .user_agent("Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+        .build()
+        .map_err(|e| format!("Could not create reqwest client: {e}"))?;
+
     for (channel_id, message_ids) in &channels {
         for message_id in message_ids {
+            println!("Redacting message {} in channel {}.", message_id.to_string().yellow(), channel_id.to_string().yellow());
             let redacted_message: String = generate_redacted();
-            edit_message(&token, *channel_id, *message_id, &redacted_message)?;
+            match edit_message(&client, &token, *channel_id, *message_id, &redacted_message) {
+                Ok(_) => {}
+                Err(e) => {
+                    println!("{}", format!("Error while editing message: {e}").red());
+                    sleep(Duration::from_millis(6000));
+                }
+            };
+            sleep(Duration::from_millis(2000));
         }
     }
 
-    
     Ok(())
 }
+
 

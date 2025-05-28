@@ -4,11 +4,9 @@ use url::Url;
 use reqwest::blocking::{Client, Response};
 use reqwest::StatusCode;
 
-pub fn edit_message(token: &str, channel_id: u64, message_id: u64, content: &str) -> Result<(), String> {
+pub fn edit_message(client: &Client, token: &str, channel_id: u64, message_id: u64, content: &str) -> Result<(), String> {
     let url: Url = Url::from_str(&format!("https://discord.com/api/v9/channels/{channel_id}/messages/{message_id}"))
-        .map_err(|e| format!("Could not generate URL for channel id \"{channel_id}\" and message id \"{message_id}\": {e}"))?;
-
-    let client = Client::new();
+        .map_err(|e| format!("Could not generate URL for channel id \"{channel_id}\" and message id \"{message_id}\": {e}"))?;;
 
     let response: Response = client
         .patch(url)
@@ -18,10 +16,7 @@ pub fn edit_message(token: &str, channel_id: u64, message_id: u64, content: &str
             "attachments": [],
         }))
         .send()
-        .map_err(|e| format!("Failed to send request: {e}"))?
-        // .text()
-        // .map_err(|e| format!("Failed to get text response: {e}"))?;
-    ;
+        .map_err(|e| format!("Failed to send request: {e}"))?;
     
     let status: StatusCode = response.status();
     if !status.is_success() {
