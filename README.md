@@ -39,7 +39,7 @@ Permission is hereby granted to any individual to install, use, and modify this 
 4. **No Warranty**: This software is provided “as is,” without warranty of any kind. The author is not liable for any damages arising from the use of this software.
 5. **Governing Law**: This license is governed by the laws of Germany.
 6. The creator of this program (BioTomateDE) is not in any way responsible for termination or other punishments of your Discord account as a result of using this selfbot program.
-   Selfbots are against Discord's Terms of Service; Hence you are running this application on your own risk.
+   Selfbots are against Discord's Terms of Service; Hence you are running this application at your own risk.
    However, your account is unlikely to get banned since this implementation respects Discord's `retry_after` cooldowns and uses a fake browser User Agent making it impossible to *prove* that you are using a selfbot.
 
 For commercial licensing or exceptions, contact: [latuskati+eula@gmail.com]
