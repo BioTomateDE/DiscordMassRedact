@@ -27,7 +27,6 @@
 14. The program should function properly now. It might take a while to edit all messages because Discord has a slow rate limit for editing old messages (probably to prevent mass redacts like this).
 
 # Licence
-[//]: # (what the gpt)
 Permission is hereby granted to any individual to install, use, and modify this software for **personal, non-commercial purposes**, subject to the following conditions:
 
 1. **Non-Commercial Use Only**: The software may not be used for commercial purposes without prior written permission from the creator. Commercial use includes, but is not limited to, selling the software, using it as part of a paid product or service, or using it to generate revenue.
