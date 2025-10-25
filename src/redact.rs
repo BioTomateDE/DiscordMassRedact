@@ -1,7 +1,7 @@
-use rand::prelude::IndexedRandom;
-use rand::{random_bool, rng};
 use crate::emojis::EMOJIS;
 use crate::wordlist::WORDLIST;
+use rand::prelude::IndexedRandom;
+use rand::{random_bool, random_range, rng};
 
 fn capitalize(s: &str) -> String {
     let mut c = s.chars();
@@ -10,7 +10,6 @@ fn capitalize(s: &str) -> String {
         Some(f) => f.to_uppercase().chain(c).collect(),
     }
 }
-
 
 pub fn generate_redacted() -> String {
     let word_count: usize = rand::random_range(4..20);
@@ -27,8 +26,14 @@ pub fn generate_redacted() -> String {
             let pos = rand::random_range(0..w.len());
             match rand::random_range(0..3) {
                 0 => w.insert(pos, w.chars().nth(pos).unwrap_or('e')),
-                1 => { if !w.is_empty() { w.remove(pos.min(w.len()-1)); } },
-                _ => { w.replace_range(pos..=pos, &rand::random_range('a'..='z').to_string()); },
+                1 => {
+                    if !w.is_empty() {
+                        w.remove(pos.min(w.len() - 1));
+                    }
+                }
+                _ => {
+                    w.replace_range(pos..=pos, &rand::random_range('a'..='z').to_string());
+                }
             }
             w
         } else {
@@ -37,7 +42,7 @@ pub fn generate_redacted() -> String {
 
         // Capitalization logic
         if can_capitalize {
-            if random_bool(if sentence_length == 0 {0.19} else {0.08}) {
+            if random_bool(if sentence_length == 0 { 0.19 } else { 0.08 }) {
                 word = capitalize(&word);
                 can_capitalize = false;
             }
@@ -49,10 +54,10 @@ pub fn generate_redacted() -> String {
         // Punctuation with more natural distribution
         if random_bool(0.15 + (sentence_length as f64 * 0.02)) {
             let punctuation = match rand::random_range(0..100) {
-                0..=70 => ".",      // 70% period
-                71..=85 => ",",     // 15% comma
-                86..=95 => "!",      // 10% exclamation
-                _ => "?",            // 5% question
+                0..=70 => ".",  // 70% period
+                71..=85 => ",", // 15% comma
+                86..=95 => "!", // 10% exclamation
+                _ => "?",       // 5% question
             };
 
             buf.push_str(punctuation);
@@ -89,8 +94,8 @@ pub fn generate_redacted() -> String {
     if !buf.ends_with(|c: char| ".!?".contains(c)) && random_bool(0.6) {
         buf.pop(); // Remove trailing space
         buf.push_str(match rand::random_range(0..100) {
-            0..=80 => ".",   // 80% period
-            81..=90 => "!",  // 10% exclamation
+            0..=80 => ".",  // 80% period
+            81..=90 => "!", // 10% exclamation
             _ => "?",       // 10% question
         });
     }
@@ -107,3 +112,47 @@ pub fn generate_redacted() -> String {
     buf
 }
 
+pub fn generate_shakespeare(length: usize, quotes: &[u8]) -> String {
+    let desired_quote_length = match length {
+        0..=100 => 100,
+        101..=300 => 300,
+        _ => 2000,
+    };
+
+    let quotes_length = quotes.len();
+    let mut index = random_range(0..quotes_length - 1);
+    let mut result = "";
+
+    loop {
+        if index >= quotes_length {
+            index = random_range(0..quotes_length - 1);
+        }
+
+        let character = quotes[index];
+
+        index += 1;
+        // Skip if in middle of line
+        if character != b'\n' {
+            continue;
+        }
+
+        // Check each full line
+        loop {
+            if index >= quotes_length {
+                break;
+            }
+
+            let character = quotes[index];
+
+            // We want a line with only uppercase letters and a dot at the end
+            if !character.is_ascii_uppercase() && character != b'.' {
+                break;
+            }
+
+            // If a dot is encountered, check if this is the end of the line
+            if character == b'.' && quotes[index + 1] == b'\n' {
+                // Criteria were met. Now scan until next new line to obtain a quote
+            }
+        }
+    }
+}
