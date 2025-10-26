@@ -122,12 +122,13 @@ pub fn generate_shakespeare(length: usize, quotes: &[u8]) -> String {
     };
 
     let quotes_length = quotes.len();
-    let mut index = random_range(0..quotes_length - 1);
+    let mut index = quotes_length; // Will be reset in first iteration
     // println!("Index = {}", index);
 
     loop {
         if index + 1 >= quotes_length {
             index = random_range(0..quotes_length - 1);
+            println!("index= {}", index);
         }
         let og_index = index;
 
@@ -135,6 +136,10 @@ pub fn generate_shakespeare(length: usize, quotes: &[u8]) -> String {
         // Skip if in middle of line
         if quotes.get(index) != Some(&b'\n') {
             continue;
+        }
+
+        while quotes.get(index) == Some(&b'\n') {
+            index += 1;
         }
 
         let mut result: String = String::new();
@@ -146,6 +151,12 @@ pub fn generate_shakespeare(length: usize, quotes: &[u8]) -> String {
             if index >= quotes_length {
                 break;
             }
+
+            let character;
+            if index + 50 < quotes_length {
+                character = str::from_utf8(&quotes[index..index+50]).unwrap();
+            }
+
 
             // We want a line with only uppercase letters and a dot at the end
             if !quotes[index].is_ascii_uppercase() && quotes.get(index) != Some(&b'.') {
@@ -161,20 +172,17 @@ pub fn generate_shakespeare(length: usize, quotes: &[u8]) -> String {
                 index += 1;
                 while !(quotes.get(index) == Some(&b'\n') && quotes.get(index + 1) == Some(&b'\n'))
                 {
+                    let character = format!("{:?}", quotes[index] as char);
                     result.push(quotes[index] as char);
                     index += 1;
                 }
                 // println!("Quote ended");
-                println!("INdex: {}", og_index);
                 break;
             }
         }
 
-        if !result.is_empty() {
-            return result;
-        }
-
         if result.len() <= desired_quote_length && !result.is_empty() {
+            println!("INdex: {}", og_index);
             return result;
         }
     }
