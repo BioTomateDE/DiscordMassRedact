@@ -38,12 +38,6 @@ pub fn generate_shakespeare(length: usize) -> String {
                 break;
             }
 
-            // TODO: @lenus why is this unused
-            let character;
-            if index + 50 < quotes_length {
-                character = str::from_utf8(&file[index..index + 50]).unwrap();
-            }
-
             // We want a line with only uppercase letters and a dot at the end
             if !file[index].is_ascii_uppercase() && file.get(index) != Some(&b'.') {
                 break;
@@ -54,7 +48,6 @@ pub fn generate_shakespeare(length: usize) -> String {
                 // Criteria were met. Now scan until next new line to obtain a quote
                 index += 1;
                 while !(file.get(index) == Some(&b'\n') && file.get(index + 1) == Some(&b'\n')) {
-                    let character = format!("{:?}", file[index] as char);
                     result.push(file[index] as char);
                     index += 1;
                 }

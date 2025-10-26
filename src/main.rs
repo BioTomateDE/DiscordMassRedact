@@ -1,6 +1,5 @@
 use crate::discord::{DiscordError, delete_message, edit_message, user_get_displayname};
 use crate::extract::{Channel, Message, extract_messages};
-use crate::redact::generate_redacted;
 use crate::shakespeare::generate_shakespeare;
 use chrono::{DateTime, NaiveDate, Utc};
 use clap::{Parser, ValueEnum};
@@ -14,16 +13,13 @@ use std::thread::sleep;
 use std::time::Duration;
 
 mod discord;
-mod emojis;
 mod extract;
-mod redact;
 mod shakespeare;
 mod user_agents;
 
 #[derive(Debug, Clone, ValueEnum)]
 enum DeletionMode {
     Delete,
-    RandomWords,
     Shakespeare,
 }
 
@@ -260,16 +256,6 @@ fn handle_message(
 
     let result = match args.mode {
         DeletionMode::Delete => delete_message(&args.token, channel.id, message.id),
-        DeletionMode::RandomWords => {
-            let content = generate_redacted();
-            edit_message(
-                &args.token,
-                channel.id,
-                message.id,
-                &content,
-                args.preserve_attachments,
-            )
-        }
         DeletionMode::Shakespeare => {
             let content = generate_shakespeare(message.content.len());
             edit_message(
