@@ -3,8 +3,6 @@ name: Rust Multi-Platform Build
 on:
   push:
     branches: [ "master" ]
-    tags:
-      - 'v*'
   pull_request:
     branches: [ "master" ]
 
@@ -12,7 +10,32 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # Check if version changed
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      version_changed: ${{ steps.check.outputs.changed }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 2
+    
+    - name: Get current version
+      id: version
+      run: |
+        VERSION=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Current version: $VERSION"
+    
+    - name: Check if version changed
+      id: check
+      if: github.event_name == 'push'
+      run: |
+        git diff HEAD^ HEAD -- Cargo.toml | grep '^+version = ' && echo "changed=true" >> $GITHUB_OUTPUT || echo "changed=false" >> $GITHUB_OUTPUT
+
   build:
+    needs: check-version
     strategy:
       matrix:
         include:
@@ -20,9 +43,6 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             name: linux-x64
-          - os: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
-            name: linux-arm64
           
           # Windows targets
           - os: windows-latest
@@ -60,38 +80,53 @@ jobs:
     - name: Build
       run: cargo build --release --verbose --target ${{ matrix.target }}
     
-    # Package binaries
-    - name: Package binary (Unix)
+    # Rename binaries for clarity
+    - name: Rename binary (Unix)
       if: matrix.os != 'windows-latest'
       run: |
         cp target/${{ matrix.target }}/release/discord-mass-redact \
            discord-mass-redact
     
-    - name: Package binary (Windows)
+    - name: Rename binary (Windows)
       if: matrix.os == 'windows-latest'
       run: |
         copy target\${{ matrix.target }}\release\discord-mass-redact.exe `
              discord-mass-redact.exe
     
-    # Upload artifacts for non-release builds
+    # Upload artifacts for all builds
     - name: Upload artifacts
-      if: startsWith(github.ref, 'refs/tags/') == false
       uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.name }}
-        path : |
+        path: |
           discord-mass-redact
           discord-mass-redact.exe
         if-no-files-found: ignore
+
+  # Create release if version changed
+  release:
+    needs: [check-version, build]
+    if: needs.check-version.outputs.version_changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
     
-    # Upload to release for tagged builds
-    - name: Upload to release
-      if: startsWith(github.ref, 'refs/tags/')
+    - name: Display structure of downloaded files
+      run: ls -R artifacts
+    
+    - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
-        path : |
-          discord-mass-redact
-          discord-mass-redact.exe
-        if-no-files-found: ignore
+        tag_name: v${{ needs.check-version.outputs.version }}
+        name: Release v${{ needs.check-version.outputs.version }}
+        draft: false
+        prerelease: false
+        files: artifacts/**/*
+        generate_release_notes: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
