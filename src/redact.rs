@@ -1,3 +1,5 @@
+use std::char;
+
 use crate::emojis::EMOJIS;
 use crate::wordlist::WORDLIST;
 use rand::prelude::IndexedRandom;
@@ -121,38 +123,59 @@ pub fn generate_shakespeare(length: usize, quotes: &[u8]) -> String {
 
     let quotes_length = quotes.len();
     let mut index = random_range(0..quotes_length - 1);
-    let mut result = "";
+    // println!("Index = {}", index);
 
     loop {
-        if index >= quotes_length {
+        if index + 1 >= quotes_length {
             index = random_range(0..quotes_length - 1);
         }
-
-        let character = quotes[index];
+        let og_index = index;
 
         index += 1;
         // Skip if in middle of line
-        if character != b'\n' {
+        if quotes.get(index) != Some(&b'\n') {
             continue;
         }
 
+        let mut result: String = String::new();
+
         // Check each full line
         loop {
+            index += 1;
+
             if index >= quotes_length {
                 break;
             }
 
-            let character = quotes[index];
-
             // We want a line with only uppercase letters and a dot at the end
-            if !character.is_ascii_uppercase() && character != b'.' {
+            if !quotes[index].is_ascii_uppercase() && quotes.get(index) != Some(&b'.') {
                 break;
             }
+            // println!("character = {:?}", char::from(quotes[index]));
+            // println!("Character met criteria");
 
             // If a dot is encountered, check if this is the end of the line
-            if character == b'.' && quotes[index + 1] == b'\n' {
+            if quotes.get(index) == Some(&b'.') && quotes.get(index + 1) == Some(&b'\n') {
+                // println!("Found quote");
                 // Criteria were met. Now scan until next new line to obtain a quote
+                index += 1;
+                while !(quotes.get(index) == Some(&b'\n') && quotes.get(index + 1) == Some(&b'\n'))
+                {
+                    result.push(quotes[index] as char);
+                    index += 1;
+                }
+                // println!("Quote ended");
+                println!("INdex: {}", og_index);
+                break;
             }
+        }
+
+        if !result.is_empty() {
+            return result;
+        }
+
+        if result.len() <= desired_quote_length && !result.is_empty() {
+            return result;
         }
     }
 }
