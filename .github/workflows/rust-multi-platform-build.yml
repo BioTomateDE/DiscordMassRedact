@@ -84,23 +84,23 @@ jobs:
     - name: Rename binary (Unix)
       if: matrix.os != 'windows-latest'
       run: |
-        cp target/${{ matrix.target }}/release/discord-mass-redact \
-           discord-mass-redact
+        cd target/${{ matrix.target }}/release
+        tar czf ../../../${{ github.event.repository.name }}-${{ matrix.name }}.tar.gz discord-mass-redact
     
     - name: Rename binary (Windows)
       if: matrix.os == 'windows-latest'
       run: |
-        copy target\${{ matrix.target }}\release\discord-mass-redact.exe `
-             discord-mass-redact.exe
+        cd target/${{ matrix.target }}/release
+        7z a ../../../${{ github.event.repository.name }}-${{ matrix.name }}.zip discord-mass-redact.exe
     
     # Upload artifacts for all builds
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.name }}
-        path: |
-          discord-mass-redact
-          discord-mass-redact.exe
+        files: |
+          *.tar.gz
+          *.zip
         if-no-files-found: ignore
 
   # Create release if version changed
