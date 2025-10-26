@@ -3,6 +3,7 @@ use reqwest::StatusCode;
 use reqwest::blocking::Response;
 use serde_json::{Value, json};
 use std::str::FromStr;
+use colored::Colorize;
 use url::Url;
 
 pub enum DiscordError {
@@ -41,19 +42,24 @@ fn handle_response(response: Response) -> Result<(), DiscordError> {
             .get("retry_after")
             .and_then(|v| v.as_f64())
             .unwrap_or_else(|| {
-                println!(
-                    "[WARN] Discord did not provide a `retry_after` field. Defaulting to 1 second."
+                println!("{}",
+                    "[WARN] Discord did not provide a `retry_after` field. Defaulting to 1 second.".cyan()
                 );
                 1.0
             });
-        return Err(DiscordError::RateLimited(retry_after));
+        return Err(DiscordError::RateLimited(retry_after + 0.1));
     }
 
+    let message = match json.get("message").and_then(|v| v.as_str()) {
+        Some(msg) => msg.to_string(),
+        None => json.to_string(),
+    };
+
     Err(format!(
-        "Discord responded with status code {} - {}: {}",
+        "Discord responded with status code {} {}: {:?}",
         status.as_u16(),
         status.canonical_reason().unwrap_or("<unknown status>"),
-        json
+        message,
     )
     .into())
 }

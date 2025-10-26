@@ -1,20 +1,23 @@
 use crate::Args;
-use chrono::{DateTime, Utc};
-use serde::Deserialize;
+use chrono::{DateTime, NaiveDateTime, Utc};
+use serde::{Deserialize, Deserializer};
 use serde_with::{DisplayFromStr, serde_as};
 use std::fs::{DirEntry, ReadDir};
 use std::path::{Path, PathBuf};
 
-#[serde_as]
 #[derive(Debug, Clone, Deserialize)]
 pub struct Message {
     #[serde(rename = "ID")]
-    #[serde_as(as = "DisplayFromStr")]
     pub id: u64,
-    #[serde(rename = "Timestamp")]
+    #[serde(
+        rename = "Timestamp",
+        deserialize_with = "deserialize_discord_timestamp"
+    )]
     pub timestamp: DateTime<Utc>,
     #[serde(rename = "Contents")]
     pub content: String,
+    #[serde(rename = "Attachments")]
+    pub attachments: String,
 }
 
 #[serde_as]
@@ -34,6 +37,16 @@ pub struct Guild {
     #[serde_as(as = "DisplayFromStr")]
     pub id: u64,
     pub name: String,
+}
+
+fn deserialize_discord_timestamp<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S")
+        .map(|dt| dt.and_utc())
+        .map_err(serde::de::Error::custom)
 }
 
 fn read_text_file(dir: &Path, file: &'static str) -> Result<String, String> {
@@ -101,7 +114,7 @@ pub fn extract_messages(args: &Args) -> Result<Vec<(Channel, Vec<Message>)>, Str
             _ => {}
         }
 
-        if is_whitelisted(&args.delete_list, &channel) {
+        if !is_whitelisted(&args.delete_list, &channel) {
             continue;
         }
 

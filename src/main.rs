@@ -1,4 +1,3 @@
-use std::io::Read;
 use crate::discord::{DiscordError, delete_message, edit_message};
 use crate::extract::{Channel, Message, extract_messages};
 use crate::redact::generate_redacted;
@@ -7,6 +6,7 @@ use chrono::{DateTime, NaiveDate, Utc};
 use clap::{Parser, ValueEnum};
 use colored::Colorize;
 use reqwest::blocking::Client;
+use std::io::Read;
 use std::path::PathBuf;
 use std::sync::LazyLock;
 use std::thread::sleep;
@@ -114,9 +114,13 @@ fn main() {
 }
 
 fn execute(mut args: Args) -> Result<(), String> {
-    if let Some(before) = args.before && let Some(after) = args.after {
+    if let Some(before) = args.before
+        && let Some(after) = args.after
+    {
         if after < before {
-            return Err(format!("The `before` timestamp {before} is after the `after` timestamp {after}"));
+            return Err(format!(
+                "The `before` timestamp {before} is after the `after` timestamp {after}"
+            ));
         }
     }
 
@@ -136,7 +140,7 @@ fn execute(mut args: Args) -> Result<(), String> {
     let message_count: usize = channels.iter().map(|(_, x)| x.len()).sum();
 
     let text = format!(
-        "Got {} messages in {} channels.\n",
+        "Got {} messages in {} channels.",
         message_count,
         channels.len()
     );
@@ -145,37 +149,75 @@ fn execute(mut args: Args) -> Result<(), String> {
     println!("====== Press any key to start ======");
     std::io::stdin().read_exact(&mut [0]).unwrap();
 
+    let mut failed_messages: Vec<u64> = vec![];
+
     for (channel, messages) in channels {
         for message in messages {
             loop {
-                // sleep(Duration::from_millis(5500));
-                let success = handle_message(&args, &channel, &message);
-                if success {
+                let resp = handle_message(&args, &channel, &message);
+                if !resp.success {
+                    failed_messages.push(message.id);
+                }
+                if !resp.retry {
                     break;
                 }
             }
+            // // Default sleeping duration between messages
+            // sleep(Duration::from_millis(5500));
         }
     }
 
     println!("{}", "\nDone!".bright_green());
+    if !failed_messages.is_empty() {
+        println!("Some messages could not be redacted:");
+        for id in failed_messages {
+            println!("{id}");
+        }
+    }
 
     Ok(())
 }
 
+struct Response {
+    success: bool,
+    retry: bool,
+}
+impl Response {
+    fn ok() -> Self {
+        Self { success: true, retry: false }
+    }
+}
+
 /// Returns `[true]` if the message handling was successful; continuing to the next message.
-/// If `[false]`, a ratelimit or some other error has occurred; retry for ~5 more attempts.
-fn handle_message(args: &Args, channel: &Channel, message: &Message) -> bool {
-    if let Some(before) = args.before && message.timestamp > before {
-        return true;
+/// If `[false]`, a ratelimit or some other error has occurred; retry for a few more attempts.
+fn handle_message(args: &Args, channel: &Channel, message: &Message) -> Response {
+    if let Some(before) = args.before {
+        if message.timestamp > before {
+            return Response::ok();
+        }
     }
 
-    if let Some(after) = args.before && message.timestamp < after {
-        return true;
+    if let Some(after) = args.before {
+        if message.timestamp < after {
+            return Response::ok();
+        }
     }
+
+    if message.content.is_empty() && message.attachments.is_empty() {
+        // Skipping empty message; most likely system message
+        return Response::ok();
+    }
+
+    let channel_type = match channel.channel_type.as_str() {
+        "GUILD_TEXT" => "Guild",
+        "DM" => "DM",
+        "GROUP_DM" => "Group DM",
+        other => other,
+    };
 
     let id_str = channel.id.to_string().dimmed();
     let channel_info = if let Some(name) = &channel.name {
-        format!("{:?} ({})", name.yellow(), id_str)
+        format!("{} ({})", format!("{name:?}").yellow(), id_str)
     } else {
         format!("with ID {}", id_str)
     };
@@ -183,15 +225,16 @@ fn handle_message(args: &Args, channel: &Channel, message: &Message) -> bool {
     let guild_info = if let Some(guild) = &channel.guild {
         format!(
             " in guild {:?} ({})",
-            guild.name.yellow(),
+            format!("{:?}", guild.name).yellow(),
             guild.id.to_string().dimmed(),
         )
     } else {
         String::new()
     };
 
+
     println!(
-        "Redacting message with ID {} in channel {channel_info}{guild_info}.",
+        "Redacting message with ID {} in {channel_type} channel {channel_info}{guild_info}.",
         message.id.to_string().dimmed(),
     );
 
@@ -219,17 +262,21 @@ fn handle_message(args: &Args, channel: &Channel, message: &Message) -> bool {
         }
     };
 
-    let Err(error) = result else { return true };
+    let Err(error) = result else {
+        println!("{}", format!("Redacted message {:?}", message.content).green());
+        return Response::ok()
+    };
 
     match error {
         DiscordError::RateLimited(retry_after) => {
-            println!("Too many requests! Retrying after {retry_after:.2} seconds.");
+            // println!("{}", format!("Too many requests! Retrying after {retry_after:.2} seconds.").yellow());
             sleep(Duration::from_secs_f64(retry_after));
+            Response { success: false, retry: true }
         }
         DiscordError::Other(message) => {
             println!("{}", message.red());
+            // Do not bother retrying for these errors.
+            Response { success: false, retry: false }
         }
     }
-
-    false
 }
