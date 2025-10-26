@@ -2,7 +2,6 @@ use crate::edit_message::edit_message;
 use crate::extract_message_ids::{Message, extract_messages};
 use crate::redact::{generate_redacted, generate_shakespeare};
 use colored::Colorize;
-use rand::random_range;
 use reqwest::blocking::Client;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -14,14 +13,6 @@ mod emojis;
 mod extract_message_ids;
 mod redact;
 mod wordlist;
-
-fn count_messages(channels: &HashMap<u64, Vec<Message>>) -> usize {
-    let mut count: usize = 0;
-    for channel_messages in channels.values() {
-        count += channel_messages.len();
-    }
-    count
-}
 
 fn main() -> Result<(), String> {
     dotenv::dotenv().map_err(|e| format!("Could not initialize environment variables: {e}"))?;
@@ -37,16 +28,16 @@ fn main() -> Result<(), String> {
         "{}",
         format!(
             "Got {} messages in {} channels.\n",
-            count_messages(&channels),
+            channels.values().map(Vec::len).sum::<usize>(),
             channels.len()
         )
         .bright_purple()
     );
 
     let client: Client = Client::builder()
-            .user_agent("Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
-            .build()
-            .map_err(|e| format!("Could not create reqwest client: {e}"))?;
+        .user_agent("Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+        .build()
+        .map_err(|e| format!("Could not create `reqwest` client: {e}"))?;
 
     let shakespeare_mode = std::env::args().nth(1) == Some(String::from("shakespeare"));
 

@@ -154,9 +154,8 @@ pub fn generate_shakespeare(length: usize, quotes: &[u8]) -> String {
 
             let character;
             if index + 50 < quotes_length {
-                character = str::from_utf8(&quotes[index..index+50]).unwrap();
+                character = str::from_utf8(&quotes[index..index + 50]).unwrap();
             }
-
 
             // We want a line with only uppercase letters and a dot at the end
             if !quotes[index].is_ascii_uppercase() && quotes.get(index) != Some(&b'.') {

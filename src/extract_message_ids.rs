@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs::{DirEntry, ReadDir};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::Chars;
 
 #[derive(Deserialize)]
@@ -12,10 +12,7 @@ pub struct Message {
     pub Contents: String,
 }
 
-pub fn extract_messages(directory: &PathBuf) -> Result<HashMap<u64, Vec<Message>>, String> {
-    const FOLDER_NAME_ERR_MSG: &str =
-        "Names of subfolders should be formatted like `c136132671724532136`!";
-
+pub fn extract_messages(directory: &Path) -> Result<HashMap<u64, Vec<Message>>, String> {
     let entries: ReadDir = directory
         .read_dir()
         .map_err(|e| format!("Could not get children of directory {directory:?}: {e}"))?;
@@ -46,12 +43,13 @@ pub fn extract_messages(directory: &PathBuf) -> Result<HashMap<u64, Vec<Message>
         let mut folder_name_chars: Chars = folder_name.chars();
         if folder_name_chars.next().unwrap() != 'c' {
             return Err(format!(
-                "{FOLDER_NAME_ERR_MSG} Folder name does not start with 'c': {folder_name}"
+                "Folder name does not start with 'c': {folder_name}"
             ));
         }
         let folder_name: &str = folder_name_chars.as_str(); // remove the leading c
-        let channel_id: u64 = folder_name.parse()
-            .map_err(|_| format!("{FOLDER_NAME_ERR_MSG} Folder name does start with 'c' but is not followed by a number: {folder_name}"))?;
+        let channel_id: u64 = folder_name.parse().map_err(|_| {
+            format!("Folder name starts with 'c' but is not followed by a number: {folder_name}")
+        })?;
 
         channels.insert(channel_id, messages);
     }

@@ -1936,4 +1936,3 @@ pub const EMOJIS: [&str; 1936] = [
     "zombie_woman",
     "zzz",
 ];
-
