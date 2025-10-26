@@ -1,3 +1,4 @@
+/// TODO: expand wordlist; 1000 isn't enough.
 pub const WORDLIST: [&str; 1000] = [
     "a",
     "ability",

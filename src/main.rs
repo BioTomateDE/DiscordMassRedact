@@ -1,5 +1,6 @@
-use crate::discord::{delete_message, edit_message, DiscordError};
-use crate::extract_message_ids::{Channel, Message, extract_messages};
+use std::io::Read;
+use crate::discord::{DiscordError, delete_message, edit_message};
+use crate::extract::{Channel, Message, extract_messages};
 use crate::redact::generate_redacted;
 use crate::shakespeare::generate_shakespeare;
 use chrono::{DateTime, NaiveDate, Utc};
@@ -13,7 +14,7 @@ use std::time::Duration;
 
 mod discord;
 mod emojis;
-mod extract_message_ids;
+mod extract;
 mod redact;
 mod shakespeare;
 mod user_agents;
@@ -105,10 +106,19 @@ pub static CLIENT: LazyLock<Client> = LazyLock::new(|| {
         .expect("Failed to create reqwest client")
 });
 
-fn main() -> Result<(), String> {
-    let mut args = Args::parse();
-    println!("{args:?}");
-    // std::process::exit(0);
+fn main() {
+    let args = Args::parse();
+    if let Err(error) = execute(args) {
+        eprintln!("{}", error.bright_red());
+    }
+}
+
+fn execute(mut args: Args) -> Result<(), String> {
+    if let Some(before) = args.before && let Some(after) = args.after {
+        if after < before {
+            return Err(format!("The `before` timestamp {before} is after the `after` timestamp {after}"));
+        }
+    }
 
     if let Some(file) = &args.preserve_list_file {
         let content = std::fs::read_to_string(file)
@@ -132,11 +142,17 @@ fn main() -> Result<(), String> {
     );
     println!("{}", text.bright_purple());
 
+    println!("====== Press any key to start ======");
+    std::io::stdin().read_exact(&mut [0]).unwrap();
+
     for (channel, messages) in channels {
         for message in messages {
             loop {
-                sleep(Duration::from_millis(5500));
-                handle_message(&args, &channel, &message);
+                // sleep(Duration::from_millis(5500));
+                let success = handle_message(&args, &channel, &message);
+                if success {
+                    break;
+                }
             }
         }
     }
@@ -149,32 +165,61 @@ fn main() -> Result<(), String> {
 /// Returns `[true]` if the message handling was successful; continuing to the next message.
 /// If `[false]`, a ratelimit or some other error has occurred; retry for ~5 more attempts.
 fn handle_message(args: &Args, channel: &Channel, message: &Message) -> bool {
+    if let Some(before) = args.before && message.timestamp > before {
+        return true;
+    }
+
+    if let Some(after) = args.before && message.timestamp < after {
+        return true;
+    }
+
+    let id_str = channel.id.to_string().dimmed();
+    let channel_info = if let Some(name) = &channel.name {
+        format!("{:?} ({})", name.yellow(), id_str)
+    } else {
+        format!("with ID {}", id_str)
+    };
+
+    let guild_info = if let Some(guild) = &channel.guild {
+        format!(
+            " in guild {:?} ({})",
+            guild.name.yellow(),
+            guild.id.to_string().dimmed(),
+        )
+    } else {
+        String::new()
+    };
+
     println!(
-        "Redacting message with ID {} in channel {:?} ({}) in guild {:?} ({}).",
+        "Redacting message with ID {} in channel {channel_info}{guild_info}.",
         message.id.to_string().dimmed(),
-        channel.name.yellow(),
-        channel.id.to_string().dimmed(),
-        channel.guild.name.yellow(),
-        channel.guild.id.to_string().dimmed(),
     );
 
     let result = match args.mode {
-        DeletionMode::Delete => {
-            delete_message(&args.token, channel.id, message.id)
-        }
+        DeletionMode::Delete => delete_message(&args.token, channel.id, message.id),
         DeletionMode::RandomWords => {
             let content = generate_redacted();
-            edit_message(&args.token, channel.id, message.id, &content, args.preserve_attachments)
+            edit_message(
+                &args.token,
+                channel.id,
+                message.id,
+                &content,
+                args.preserve_attachments,
+            )
         }
         DeletionMode::Shakespeare => {
             let content = generate_shakespeare(message.content.len());
-            edit_message(&args.token, channel.id, message.id, &content, args.preserve_attachments)
+            edit_message(
+                &args.token,
+                channel.id,
+                message.id,
+                &content,
+                args.preserve_attachments,
+            )
         }
     };
 
-    let Err(error) = result else {
-        return true
-    };
+    let Err(error) = result else { return true };
 
     match error {
         DiscordError::RateLimited(retry_after) => {

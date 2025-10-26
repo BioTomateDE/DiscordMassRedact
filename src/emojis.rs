@@ -1,3 +1,4 @@
+/// TODO: fix this emoji list, some of these dont exist in discord. just use unicode or smth.
 pub const EMOJIS: [&str; 1936] = [
     "+1",
     "-1",
