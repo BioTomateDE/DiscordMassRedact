@@ -19,7 +19,6 @@ mod extract;
 mod redact;
 mod shakespeare;
 mod user_agents;
-mod wordlist;
 
 #[derive(Debug, Clone, ValueEnum)]
 enum DeletionMode {

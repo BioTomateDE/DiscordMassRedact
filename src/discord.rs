@@ -60,12 +60,10 @@ fn handle_response(response: Response) -> Result<(), DiscordError> {
 }
 
 fn extract_retry_after(json: Value) -> f64 {
-    const WARN: &str =
-        "[WARN] Discord did not provide a `retry_after` field. Defaulting to 1 second.";
     json.get("retry_after")
         .and_then(|v| v.as_f64())
         .unwrap_or_else(|| {
-            println!("{}", WARN.cyan());
+            println!("{} Json: {json}", "Discord did not provide a `retry_after` field. Defaulting to 1 second.".cyan());
             1.0
         })
 }

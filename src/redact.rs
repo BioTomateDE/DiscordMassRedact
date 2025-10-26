@@ -1,7 +1,6 @@
 use std::char;
 
 use crate::emojis::EMOJIS;
-use crate::wordlist::WORDLIST;
 use rand::prelude::IndexedRandom;
 use rand::{random_bool, random_range, rng};
 
@@ -12,6 +11,8 @@ fn capitalize(s: &str) -> String {
         Some(f) => f.to_uppercase().chain(c).collect(),
     }
 }
+
+const WORDS: &str = include_str!("words.txt");
 
 /// TODO: make this better pls
 pub fn generate_redacted() -> String {
@@ -40,7 +41,7 @@ pub fn generate_redacted() -> String {
             }
             w
         } else {
-            WORDLIST.choose(&mut rng()).unwrap().to_string()
+            [].choose(&mut rng()).unwrap().to_string()
         };
 
         // Capitalization logic
