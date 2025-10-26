@@ -146,29 +146,27 @@ fn execute(mut args: Args) -> Result<(), String> {
     std::io::stdin().read_exact(&mut [0]).unwrap();
 
     let mut displayname_cache = HashMap::new();
-    let mut failed_messages: Vec<u64> = vec![];
+    let mut failed_messages: Vec<Message> = vec![];
 
     for (channel, messages) in channels {
         for message in messages {
             loop {
                 let resp = handle_message(&args, &mut displayname_cache, &channel, &message);
-                if !resp.success {
-                    failed_messages.push(message.id);
-                }
                 if !resp.retry {
+                    if !resp.success {
+                        failed_messages.push(message);
+                    }
                     break;
                 }
             }
-            // // Default sleeping duration between messages
-            // sleep(Duration::from_millis(5500));
         }
     }
 
     println!("{}", "\nDone!".bright_green());
     if !failed_messages.is_empty() {
         println!("Some messages could not be redacted:");
-        for id in failed_messages {
-            println!("{id}");
+        for message in failed_messages {
+            println!("{} - {:?}", message.id, message.content);
         }
     }
 
@@ -202,7 +200,7 @@ fn handle_message(
         }
     }
 
-    if let Some(after) = args.before {
+    if let Some(after) = args.after {
         if message.timestamp < after {
             return Response::ok();
         }
