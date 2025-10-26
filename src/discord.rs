@@ -125,13 +125,32 @@ pub fn user_get_displayname(token: &str, user_id: u64) -> Result<String, String>
             .send()
             .map_err(|e| format!("Failed to send request: {e}"))?;
 
-        if !response.status().is_success() {
+        let status = response.status();
+        if status == StatusCode::TOO_MANY_REQUESTS {
             let json: Value = response
                 .json()
                 .map_err(|e| format!("Could not get JSON from response: {e}"))?;
             let retry_after: f64 = extract_retry_after(json);
             sleep(Duration::from_secs_f64(retry_after));
             continue;
+        }
+
+        if !status.is_success() {
+            let json: Value = response
+                .json()
+                .map_err(|e| format!("Could not get JSON from response: {e}"))?;
+
+            let message = match json.get("message").and_then(|v| v.as_str()) {
+                Some(msg) => msg.to_string(),
+                None => json.to_string(),
+            };
+
+            return Err(format!(
+                "Discord responded with status code {} {}: {:?}",
+                status.as_u16(),
+                status.canonical_reason().unwrap_or("<unknown status>"),
+                message,
+            ));
         }
 
         let json: Resp = response

@@ -227,7 +227,7 @@ fn handle_message(
 
     let recipients = if let Some(recipients) = &channel.recipients {
         format!(
-            "with recipients {:?}",
+            " with recipients {:?}",
             recipients
                 .iter()
                 .map(|id| get_displayname(&args.token, displayname_cache, id.parse().unwrap()))
@@ -248,7 +248,7 @@ fn handle_message(
     };
 
     println!(
-        "Redacting message with ID {} in {channel_type} channel {channel_info} {recipients}{guild_info}.",
+        "Redacting message with ID {} in {channel_type} channel {channel_info}{recipients}{guild_info}.",
         message.id.to_string().dimmed(),
     );
 
