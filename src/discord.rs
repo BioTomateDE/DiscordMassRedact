@@ -1,9 +1,12 @@
 use crate::CLIENT;
+use colored::Colorize;
 use reqwest::StatusCode;
 use reqwest::blocking::Response;
+use serde::Deserialize;
 use serde_json::{Value, json};
 use std::str::FromStr;
-use colored::Colorize;
+use std::thread::sleep;
+use std::time::Duration;
 use url::Url;
 
 pub enum DiscordError {
@@ -38,15 +41,7 @@ fn handle_response(response: Response) -> Result<(), DiscordError> {
         .map_err(|e| format!("Failed to parse JSON: {e}\nResponse body: {text}"))?;
 
     if status == StatusCode::TOO_MANY_REQUESTS {
-        let retry_after: f64 = json
-            .get("retry_after")
-            .and_then(|v| v.as_f64())
-            .unwrap_or_else(|| {
-                println!("{}",
-                    "[WARN] Discord did not provide a `retry_after` field. Defaulting to 1 second.".cyan()
-                );
-                1.0
-            });
+        let retry_after: f64 = extract_retry_after(json);
         return Err(DiscordError::RateLimited(retry_after + 0.1));
     }
 
@@ -62,6 +57,17 @@ fn handle_response(response: Response) -> Result<(), DiscordError> {
         message,
     )
     .into())
+}
+
+fn extract_retry_after(json: Value) -> f64 {
+    const WARN: &str =
+        "[WARN] Discord did not provide a `retry_after` field. Defaulting to 1 second.";
+    json.get("retry_after")
+        .and_then(|v| v.as_f64())
+        .unwrap_or_else(|| {
+            println!("{}", WARN.cyan());
+            1.0
+        })
 }
 
 pub fn edit_message(
@@ -99,4 +105,40 @@ pub fn delete_message(token: &str, channel_id: u64, message_id: u64) -> Result<(
         .map_err(|e| format!("Failed to send request: {e}"))?;
 
     handle_response(response)
+}
+
+pub fn user_get_displayname(token: &str, user_id: u64) -> Result<String, String> {
+    #[derive(Deserialize)]
+    struct Resp {
+        user: User,
+    }
+    #[derive(Deserialize)]
+    struct User {
+        global_name: String,
+    }
+
+    let url = format!("{API_PREFIX}/users/{user_id}/profile");
+    let url = Url::from_str(&url).map_err(|e| format!("Could not deserialize URL {url:?}: {e}"))?;
+
+    loop {
+        let response: Response = CLIENT
+            .get(url.clone())
+            .header("Authorization", token)
+            .send()
+            .map_err(|e| format!("Failed to send request: {e}"))?;
+
+        if !response.status().is_success() {
+            let json: Value = response
+                .json()
+                .map_err(|e| format!("Could not get JSON from response: {e}"))?;
+            let retry_after: f64 = extract_retry_after(json);
+            sleep(Duration::from_secs_f64(retry_after));
+            continue;
+        }
+
+        let json: Resp = response
+            .json()
+            .map_err(|e| format!("Could not get JSON from response: {e}"))?;
+        return Ok(json.user.global_name);
+    }
 }

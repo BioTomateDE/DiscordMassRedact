@@ -1,4 +1,4 @@
-use crate::discord::{DiscordError, delete_message, edit_message};
+use crate::discord::{DiscordError, delete_message, edit_message, user_get_displayname};
 use crate::extract::{Channel, Message, extract_messages};
 use crate::redact::generate_redacted;
 use crate::shakespeare::generate_shakespeare;
@@ -6,6 +6,7 @@ use chrono::{DateTime, NaiveDate, Utc};
 use clap::{Parser, ValueEnum};
 use colored::Colorize;
 use reqwest::blocking::Client;
+use std::collections::HashMap;
 use std::io::Read;
 use std::path::PathBuf;
 use std::sync::LazyLock;
@@ -149,12 +150,13 @@ fn execute(mut args: Args) -> Result<(), String> {
     println!("====== Press any key to start ======");
     std::io::stdin().read_exact(&mut [0]).unwrap();
 
+    let mut displayname_cache = HashMap::new();
     let mut failed_messages: Vec<u64> = vec![];
 
     for (channel, messages) in channels {
         for message in messages {
             loop {
-                let resp = handle_message(&args, &channel, &message);
+                let resp = handle_message(&args, &mut displayname_cache, &channel, &message);
                 if !resp.success {
                     failed_messages.push(message.id);
                 }
@@ -184,13 +186,21 @@ struct Response {
 }
 impl Response {
     fn ok() -> Self {
-        Self { success: true, retry: false }
+        Self {
+            success: true,
+            retry: false,
+        }
     }
 }
 
 /// Returns `[true]` if the message handling was successful; continuing to the next message.
 /// If `[false]`, a ratelimit or some other error has occurred; retry for a few more attempts.
-fn handle_message(args: &Args, channel: &Channel, message: &Message) -> Response {
+fn handle_message(
+    args: &Args,
+    displayname_cache: &mut HashMap<u64, String>,
+    channel: &Channel,
+    message: &Message,
+) -> Response {
     if let Some(before) = args.before {
         if message.timestamp > before {
             return Response::ok();
@@ -222,6 +232,18 @@ fn handle_message(args: &Args, channel: &Channel, message: &Message) -> Response
         format!("with ID {}", id_str)
     };
 
+    let recipients = if let Some(recipients) = &channel.recipients {
+        format!(
+            "with recipients {:?}",
+            recipients
+                .iter()
+                .map(|id| get_displayname(&args.token, displayname_cache, id.parse().unwrap()))
+                .collect::<Vec<_>>()
+        )
+    } else {
+        String::new()
+    };
+
     let guild_info = if let Some(guild) = &channel.guild {
         format!(
             " in guild {:?} ({})",
@@ -232,9 +254,8 @@ fn handle_message(args: &Args, channel: &Channel, message: &Message) -> Response
         String::new()
     };
 
-
     println!(
-        "Redacting message with ID {} in {channel_type} channel {channel_info}{guild_info}.",
+        "Redacting message with ID {} in {channel_type} channel {channel_info} {recipients}{guild_info}.",
         message.id.to_string().dimmed(),
     );
 
@@ -263,20 +284,46 @@ fn handle_message(args: &Args, channel: &Channel, message: &Message) -> Response
     };
 
     let Err(error) = result else {
-        println!("{}", format!("Redacted message {:?}", message.content).green());
-        return Response::ok()
+        println!(
+            "{}",
+            format!("Redacted message {:?}", message.content).green()
+        );
+        return Response::ok();
     };
 
     match error {
         DiscordError::RateLimited(retry_after) => {
             // println!("{}", format!("Too many requests! Retrying after {retry_after:.2} seconds.").yellow());
             sleep(Duration::from_secs_f64(retry_after));
-            Response { success: false, retry: true }
+            Response {
+                success: false,
+                retry: true,
+            }
         }
         DiscordError::Other(message) => {
             println!("{}", message.red());
             // Do not bother retrying for these errors.
-            Response { success: false, retry: false }
+            Response {
+                success: false,
+                retry: false,
+            }
+        }
+    }
+}
+
+fn get_displayname(token: &str, cache: &mut HashMap<u64, String>, user_id: u64) -> String {
+    if let Some(name) = cache.get(&user_id) {
+        return name.clone();
+    }
+
+    match user_get_displayname(token, user_id) {
+        Ok(display_name) => {
+            cache.insert(user_id, display_name);
+            cache[&user_id].clone()
+        }
+        Err(e) => {
+            println!("Could not get displayname for user id {user_id}: {e}");
+            "<unknown user>".to_string()
         }
     }
 }

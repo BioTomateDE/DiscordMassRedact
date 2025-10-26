@@ -29,6 +29,7 @@ pub struct Channel {
     #[serde(rename = "type")]
     pub channel_type: String,
     pub guild: Option<Guild>,
+    pub recipients: Option<Vec<String>>,
 }
 
 #[serde_as]

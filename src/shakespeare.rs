@@ -16,7 +16,6 @@ pub fn generate_shakespeare(length: usize) -> String {
     loop {
         if index + 1 >= quotes_length {
             index = random_range(0..quotes_length - 1);
-            println!("index= {}", index);
         }
 
         index += 1;
