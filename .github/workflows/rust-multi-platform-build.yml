@@ -1,0 +1,97 @@
+name: Rust Multi-Platform Build
+
+on:
+  push:
+    branches: [ "master" ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ "master" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          # Linux targets
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            name: linux-x64
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            name: linux-arm64
+          
+          # Windows targets
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            name: windows-x64
+          - os: windows-latest
+            target: aarch64-pc-windows-msvc
+            name: windows-arm64
+          
+          # macOS targets
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            name: macos-x64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            name: macos-arm64
+
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ matrix.target }}
+    
+    # Linux cross-compilation dependencies
+    - name: Install cross-compilation tools (Linux)
+      if: matrix.os == 'ubuntu-latest' && matrix.target == 'aarch64-unknown-linux-gnu'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc-aarch64-linux-gnu
+    
+    - name: Build
+      run: cargo build --release --verbose --target ${{ matrix.target }}
+    
+    # Package binaries
+    - name: Package binary (Unix)
+      if: matrix.os != 'windows-latest'
+      run: |
+        cp target/${{ matrix.target }}/release/discord-mass-redact \
+           discord-mass-redact
+    
+    - name: Package binary (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        copy target\${{ matrix.target }}\release\discord-mass-redact.exe `
+             discord-mass-redact.exe
+    
+    # Upload artifacts for non-release builds
+    - name: Upload artifacts
+      if: startsWith(github.ref, 'refs/tags/') == false
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.name }}
+        path : |
+          discord-mass-redact
+          discord-mass-redact.exe
+        if-no-files-found: ignore
+    
+    # Upload to release for tagged builds
+    - name: Upload to release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        path : |
+          discord-mass-redact
+          discord-mass-redact.exe
+        if-no-files-found: ignore
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
