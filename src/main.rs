@@ -4,6 +4,7 @@ use crate::extract::{Channel, Message, extract_messages};
 use crate::shakespeare::generate_shakespeare;
 use clap::Parser;
 use colored::Colorize;
+use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::blocking::Client;
 use std::collections::HashMap;
 use std::io::Read;
@@ -46,9 +47,9 @@ fn run(mut args: Args) -> Result<(), String> {
     if let Some(before) = args.before
         && let Some(after) = args.after
     {
-        if after < before {
+        if after > before {
             return Err(format!(
-                "The `before` timestamp {before} is after the `after` timestamp {after}"
+                "The `after` timestamp {after} is after the `before` timestamp {before}"
             ));
         }
     }
@@ -79,16 +80,18 @@ fn run(mut args: Args) -> Result<(), String> {
     );
     println!("{}", text.bright_purple());
 
-    println!("====== Press any key to start ======");
-    std::io::stdin().read_exact(&mut [0]).unwrap();
+    println!("====== Press Enter to start ======");
+    std::io::stdin().read(&mut []).unwrap();
 
     let mut displayname_cache = HashMap::new();
     let mut failed_messages: Vec<Message> = vec![];
+    let bar = ProgressBar::new(message_count as u64);
+    bar.set_style(ProgressStyle::with_template("[{eta}] {wide_bar} {pos}/{len} ({percent_precise}%)").unwrap());
 
     for (channel, messages) in channels {
         for message in messages {
             loop {
-                let resp = handle_message(&args, &mut displayname_cache, &channel, &message);
+                let resp = handle_message(&args, &bar, &mut displayname_cache, &channel, &message);
                 if !resp.retry {
                     if !resp.success {
                         failed_messages.push(message);
@@ -96,9 +99,11 @@ fn run(mut args: Args) -> Result<(), String> {
                     break;
                 }
             }
+            bar.inc(1);
         }
     }
 
+    bar.finish();
     println!("{}", "\nDone!".bright_green());
     if !failed_messages.is_empty() {
         println!("Some messages could not be redacted:");
@@ -127,6 +132,7 @@ impl Response {
 /// If `[false]`, a ratelimit or some other error has occurred; retry for a few more attempts.
 fn handle_message(
     args: &Args,
+    bar: &ProgressBar,
     displayname_cache: &mut HashMap<u64, String>,
     channel: &Channel,
     message: &Message,
@@ -150,7 +156,11 @@ fn handle_message(
             " with recipients {:?}",
             recipients
                 .iter()
-                .map(|id| get_displayname(&args.token, displayname_cache, id.parse().unwrap()))
+                .map(|id| id.parse::<u64>().unwrap_or_else(|_| {
+                    bar.println(format!("Invalid user id {id:?}").red().to_string());
+                    0
+                }))
+                .map(|id| get_displayname(&args.token, displayname_cache, id))
                 .collect::<Vec<_>>()
         )
     } else {
@@ -159,7 +169,7 @@ fn handle_message(
 
     let guild_info = if let Some(guild) = &channel.guild {
         format!(
-            " in guild {:?} ({})",
+            " in guild {} ({})",
             format!("{:?}", guild.name).yellow(),
             guild.id.to_string().dimmed(),
         )
@@ -167,10 +177,10 @@ fn handle_message(
         String::new()
     };
 
-    println!(
+    bar.println(format!(
         "Redacting message with ID {} in {channel_type} channel {channel_info}{recipients}{guild_info}.",
         message.id.to_string().dimmed(),
-    );
+    ));
 
     let result = match args.mode {
         DeletionMode::Delete => delete_message(&args.token, channel.id, message.id),
@@ -187,16 +197,17 @@ fn handle_message(
     };
 
     let Err(error) = result else {
-        println!(
-            "{}",
-            format!("Redacted message {:?}", message.content).green()
+        bar.println(
+            format!("Redacted message {:?}", message.content)
+                .green()
+                .to_string(),
         );
         return Response::ok();
     };
 
     match error {
         DiscordError::RateLimited(retry_after) => {
-            // println!("{}", format!("Too many requests! Retrying after {retry_after:.2} seconds.").yellow());
+            bar.println(format!("Retrying after {retry_after:.2}s").yellow().to_string());
             sleep(Duration::from_secs_f64(retry_after));
             Response {
                 success: false,
@@ -204,7 +215,7 @@ fn handle_message(
             }
         }
         DiscordError::Other(message) => {
-            println!("{}", message.red());
+            bar.println(message.red().to_string());
             // Do not bother retrying for these errors.
             Response {
                 success: false,
@@ -221,12 +232,9 @@ fn get_displayname(token: &str, cache: &mut HashMap<u64, String>, user_id: u64) 
 
     match user_get_displayname(token, user_id) {
         Ok(display_name) => {
-            cache.insert(user_id, display_name);
-            cache[&user_id].clone()
+            cache.insert(user_id, display_name.clone());
+            display_name
         }
-        Err(e) => {
-            println!("Could not get displayname for user id {user_id}: {e}");
-            "<unknown user>".to_string()
-        }
+        Err(_) => "<unknown user>".to_string(),
     }
 }
