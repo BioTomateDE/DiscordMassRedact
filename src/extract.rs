@@ -136,6 +136,16 @@ pub fn extract_messages(args: &Args) -> Result<Vec<(Channel, Vec<Message>)>, Str
         let messages: Vec<Message> = serde_json::from_str(&messages)
             .map_err(|e| format!("Could not get JSON from messages file in {path:?}: {e}"))?;
 
+        let messages = messages
+            .into_iter()
+            .filter(|m| {
+                let after_check = args.after.map_or(true, |after| m.timestamp >= after);
+                let before_check = args.before.map_or(true, |before| m.timestamp <= before);
+                let empty = m.content.is_empty() && m.attachments.is_empty();
+                after_check && before_check && !empty
+            })
+            .collect::<Vec<_>>();
+
         channels.push((channel, messages));
     }
 

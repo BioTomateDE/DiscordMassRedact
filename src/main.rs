@@ -66,7 +66,7 @@ fn run(mut args: Args) -> Result<(), String> {
     }
 
     if !args.preserve_list.is_empty() && !args.delete_list.is_empty() {
-        return Err("Cannot use both preserve list and delete list!".to_string())
+        return Err("Cannot use both preserve list and delete list!".to_string());
     }
 
     let channels = extract_messages(&args)?;
@@ -131,23 +131,6 @@ fn handle_message(
     channel: &Channel,
     message: &Message,
 ) -> Response {
-    if let Some(before) = args.before {
-        if message.timestamp > before {
-            return Response::ok();
-        }
-    }
-
-    if let Some(after) = args.after {
-        if message.timestamp < after {
-            return Response::ok();
-        }
-    }
-
-    if message.content.is_empty() && message.attachments.is_empty() {
-        // Skipping empty message; most likely system message
-        return Response::ok();
-    }
-
     let channel_type = match channel.channel_type.as_str() {
         "GUILD_TEXT" => "Guild",
         "DM" => "DM",
