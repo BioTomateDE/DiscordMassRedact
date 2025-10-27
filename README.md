@@ -24,12 +24,12 @@ yay -S discord-mass-redact
    you should get an email from Discord containing your data.
 4. Download and extract the zip file from that email.
 5. Obtain your discord token (just google "how to get my discord token").
-6. Open a terminal and navigate to the folder where the downloaded/built program is located.
+6. Open a terminal and navigate to the folder where the downloaded/built program is located. (Skip this step if installed via AUR)
 7. Run the program by typing 
-   `./discord-mass-redact YOUR.DISCORDTOKEN C:/Users/YourUsername/Downloads/package/ some-deletion-mode`.
+   `./discord-mass-redact YOUR.DISCORDTOKEN C:/Users/YourUsername/Downloads/package/ some-deletion-mode`. (Remove the preceding `./` if installed via AUR)
    > You must replace the arguments with your discord token, 
    > the correct path to your discord data export and your desired mode respectively.
-   > Type `./discord-mass-redact --help` for more information.
+   > Type `./discord-mass-redact --help` for more information. (Remove the preceding `./` if installed via AUR)
 8. The program should function properly now. 
    It might take a while to edit all messages because Discord has a slow rate limit 
    for editing old messages (probably to prevent mass redacts like this).
