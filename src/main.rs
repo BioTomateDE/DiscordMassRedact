@@ -1,88 +1,21 @@
+use crate::cli::{Args, DeletionMode};
 use crate::discord::{DiscordError, delete_message, edit_message, user_get_displayname};
 use crate::extract::{Channel, Message, extract_messages};
 use crate::shakespeare::generate_shakespeare;
-use chrono::{DateTime, NaiveDate, Utc};
-use clap::{Parser, ValueEnum};
+use clap::Parser;
 use colored::Colorize;
 use reqwest::blocking::Client;
 use std::collections::HashMap;
 use std::io::Read;
-use std::path::PathBuf;
 use std::sync::LazyLock;
 use std::thread::sleep;
 use std::time::Duration;
 
+mod cli;
 mod discord;
 mod extract;
 mod shakespeare;
 mod user_agents;
-
-#[derive(Debug, Clone, ValueEnum)]
-enum DeletionMode {
-    Delete,
-    Shakespeare,
-}
-
-/// Discord Selfbot mass message redaction tool
-#[derive(Parser, Debug)]
-#[command(version, about, long_about = None)]
-struct Args {
-    /// Your personal Discord Token.
-    token: String,
-
-    /// The directory of your Discord data export
-    export_dir: PathBuf,
-
-    /// How messages should be deleted/edited
-    mode: DeletionMode,
-
-    /// Whether to preserve message attachments like images or videos. Default: false
-    #[arg(short, long, default_value_t = false)]
-    preserve_attachments: bool,
-
-    /// Whether to delete messages from Guilds (Servers). Default: true
-    #[arg(long, default_value_t = true)]
-    delete_guilds: bool,
-
-    /// Whether to delete messages from DMs (Direct Messages). Default: true
-    #[arg(long, default_value_t = true)]
-    delete_dms: bool,
-
-    /// Whether to delete messages from Groups DMs. Default: true
-    #[arg(long, default_value_t = true)]
-    delete_groups: bool,
-
-    /// Only delete messages after this date (YYYY-MM-DD format)
-    #[arg(short, long, value_parser = parse_date)]
-    after: Option<DateTime<Utc>>,
-
-    /// Only delete messages before this date (YYYY-MM-DD format)
-    #[arg(short, long, value_parser = parse_date)]
-    before: Option<DateTime<Utc>>,
-
-    /// A comma separated list of Channel or Guild IDs where messages shouldn't be deleted.
-    #[arg(long, value_delimiter = ',')]
-    preserve_list: Vec<u64>,
-
-    /// A path to a file containing a newline separated blacklist (see --preserve-list).
-    #[arg(long)]
-    preserve_list_file: Option<PathBuf>,
-
-    /// A comma separated list of Channel or Guild IDs where messages should be deleted.
-    /// If unset, ALL messages are deleted.
-    #[arg(long, value_delimiter = ',')]
-    delete_list: Vec<u64>,
-
-    /// A path to a file containing a newline separated whitelist (see --delete-list).
-    #[arg(long)]
-    delete_list_file: Option<PathBuf>,
-}
-
-fn parse_date(s: &str) -> Result<DateTime<Utc>, String> {
-    NaiveDate::parse_from_str(s, "%Y-%m-%d")
-        .map(|date| date.and_hms_opt(0, 0, 0).unwrap().and_utc())
-        .map_err(|e| format!("Invalid date: '{}'. Use YYYY-MM-DD format: {}", s, e))
-}
 
 fn append_id_list(list: &mut Vec<u64>, file_content: String) -> Result<(), String> {
     for line in file_content.trim().lines() {
@@ -104,12 +37,12 @@ pub static CLIENT: LazyLock<Client> = LazyLock::new(|| {
 
 fn main() {
     let args = Args::parse();
-    if let Err(error) = execute(args) {
+    if let Err(error) = run(args) {
         eprintln!("{}", error.bright_red());
     }
 }
 
-fn execute(mut args: Args) -> Result<(), String> {
+fn run(mut args: Args) -> Result<(), String> {
     if let Some(before) = args.before
         && let Some(after) = args.after
     {
@@ -130,6 +63,10 @@ fn execute(mut args: Args) -> Result<(), String> {
         let content = std::fs::read_to_string(file)
             .map_err(|e| format!("Could not read delete list file: {e}"))?;
         append_id_list(&mut args.delete_list, content)?;
+    }
+
+    if !args.preserve_list.is_empty() && !args.delete_list.is_empty() {
+        return Err("Cannot use both preserve list and delete list!".to_string())
     }
 
     let channels = extract_messages(&args)?;

@@ -2,7 +2,6 @@ use crate::CLIENT;
 use colored::Colorize;
 use reqwest::StatusCode;
 use reqwest::blocking::Response;
-use serde::Deserialize;
 use serde_json::{Value, json};
 use std::str::FromStr;
 use std::thread::sleep;
