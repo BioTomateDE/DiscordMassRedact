@@ -27,11 +27,8 @@ fn get_url(channel_id: u64, message_id: u64) -> Result<Url, String> {
     Url::from_str(&url).map_err(|e| format!("Could not deserialize URL {url:?}: {e}"))
 }
 
-fn handle_response(response: Response) -> Result<(), DiscordError> {
+fn handle_response(response: Response) -> Result<Value, DiscordError> {
     let status: StatusCode = response.status();
-    if status.is_success() {
-        return Ok(());
-    }
 
     let text: String = response
         .text()
@@ -39,6 +36,10 @@ fn handle_response(response: Response) -> Result<(), DiscordError> {
 
     let json: Value = serde_json::from_str(&text)
         .map_err(|e| format!("Failed to parse JSON: {e}\nResponse body: {text}"))?;
+
+    if status.is_success() {
+        return Ok(json);
+    }
 
     if status == StatusCode::TOO_MANY_REQUESTS {
         let retry_after: f64 = extract_retry_after(json);
@@ -63,7 +64,10 @@ fn extract_retry_after(json: Value) -> f64 {
     json.get("retry_after")
         .and_then(|v| v.as_f64())
         .unwrap_or_else(|| {
-            println!("{} Json: {json}", "Discord did not provide a `retry_after` field. Defaulting to 1 second.".cyan());
+            println!(
+                "{} Json: {json}",
+                "Discord did not provide a `retry_after` field. Defaulting to 1 second.".cyan()
+            );
             1.0
         })
 }
@@ -90,7 +94,8 @@ pub fn edit_message(
         .send()
         .map_err(|e| format!("Failed to send request: {e}"))?;
 
-    handle_response(response)
+    handle_response(response)?;
+    Ok(())
 }
 
 pub fn delete_message(token: &str, channel_id: u64, message_id: u64) -> Result<(), DiscordError> {
@@ -102,19 +107,11 @@ pub fn delete_message(token: &str, channel_id: u64, message_id: u64) -> Result<(
         .send()
         .map_err(|e| format!("Failed to send request: {e}"))?;
 
-    handle_response(response)
+    handle_response(response)?;
+    Ok(())
 }
 
 pub fn user_get_displayname(token: &str, user_id: u64) -> Result<String, String> {
-    #[derive(Deserialize)]
-    struct Resp {
-        user: User,
-    }
-    #[derive(Deserialize)]
-    struct User {
-        global_name: String,
-    }
-
     let url = format!("{API_PREFIX}/users/{user_id}/profile");
     let url = Url::from_str(&url).map_err(|e| format!("Could not deserialize URL {url:?}: {e}"))?;
 
@@ -125,37 +122,23 @@ pub fn user_get_displayname(token: &str, user_id: u64) -> Result<String, String>
             .send()
             .map_err(|e| format!("Failed to send request: {e}"))?;
 
-        let status = response.status();
-        if status == StatusCode::TOO_MANY_REQUESTS {
-            let json: Value = response
-                .json()
-                .map_err(|e| format!("Could not get JSON from response: {e}"))?;
-            let retry_after: f64 = extract_retry_after(json);
-            sleep(Duration::from_secs_f64(retry_after));
-            continue;
+        match handle_response(response) {
+            Ok(json) => {
+                let display_name = json
+                    .get("user")
+                    .and_then(|i| i.get("global_name"))
+                    .and_then(|i| i.as_str())
+                    .ok_or_else(|| {
+                        format!("Json does not contain string user.global_name: {json}")
+                    })?;
+                return Ok(display_name.to_string());
+            }
+            Err(DiscordError::RateLimited(retry_after)) => {
+                sleep(Duration::from_secs_f64(retry_after));
+            }
+            Err(DiscordError::Other(e)) => {
+                return Err(e);
+            }
         }
-
-        if !status.is_success() {
-            let json: Value = response
-                .json()
-                .map_err(|e| format!("Could not get JSON from response: {e}"))?;
-
-            let message = match json.get("message").and_then(|v| v.as_str()) {
-                Some(msg) => msg.to_string(),
-                None => json.to_string(),
-            };
-
-            return Err(format!(
-                "Discord responded with status code {} {}: {:?}",
-                status.as_u16(),
-                status.canonical_reason().unwrap_or("<unknown status>"),
-                message,
-            ));
-        }
-
-        let json: Resp = response
-            .json()
-            .map_err(|e| format!("Could not get JSON from response: {e}"))?;
-        return Ok(json.user.global_name);
     }
 }
