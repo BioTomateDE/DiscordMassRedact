@@ -4,12 +4,16 @@ Install the package from the AUR using your favourite AUR helper:
 yay -S discord-mass-redact
 ```
 
-# Installation Guide (Other Linux Distributions, MacOS and Windows)
-1. On the right side, click on **Releases** and find the version you'd like to install (presumably the latest one).
-2. Download the corresponding archive for your platform (linux/mac/windows;x64/ARM).
-3. Extract the archive and run the contained executable.
+# Installation Guide (Unix, MacOS and Windows)
+1. On the right side, click on **Releases** and find the version you would like to install (presumably the latest one).
+2. Download the corresponding archive for your platform and architecture.
+   > If you don't know what you're doing, you probably have x86_64.
+3. Extract the archive.
+4. Open a console window.
+5. Run the contained executable.
 
-# Installation Guide (other platforms)
+# Compilation Guide
+If you are somehow on a non-supported platform or wish to compile from scratch, follow these steps:
 1. Open a command prompt and navigate to some temporary folder.
 2. Clone this repository: `git clone https://github.com/BioTomateDE/DiscordMassRedact`
 3. Navigate into the cloned repository: `cd ./DiscordMassRedact`.
@@ -26,10 +30,10 @@ yay -S discord-mass-redact
 5. Obtain your discord token (just google "how to get my discord token").
 6. Open a terminal and navigate to the folder where the downloaded/built program is located. (Skip this step if installed via AUR)
 7. Run the program by typing 
-   `./discord-mass-redact YOUR.DISCORDTOKEN C:/Users/YourUsername/Downloads/package/ some-deletion-mode`. (Remove the preceding `./` if installed via AUR)
+   `./discord-mass-redact YOUR.DISCORDTOKEN C:/Users/YourUsername/Downloads/package/ some-deletion-mode`.
    > You must replace the arguments with your discord token, 
    > the correct path to your discord data export and your desired mode respectively.
-   > Type `./discord-mass-redact --help` for more information. (Remove the preceding `./` if installed via AUR)
+   > Type `./discord-mass-redact --help` for more information.
 8. The program should function properly now. 
    It might take a while to edit all messages because Discord has a slow rate limit 
    for editing old messages (probably to prevent mass redacts like this).
