@@ -1,4 +1,5 @@
 use crate::cli::{Args, DeletionMode};
+use crate::continuation::write_continuation_file;
 use crate::discord::{DiscordError, delete_message, edit_message, user_get_displayname};
 use crate::extract::{Channel, Message, extract_messages};
 use crate::shakespeare::generate_shakespeare;
@@ -7,14 +8,13 @@ use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::blocking::Client;
 use std::collections::HashMap;
-use std::fs::OpenOptions;
-use std::io::Read;
-use std::io::Write;
+use std::io;
 use std::sync::LazyLock;
 use std::thread::sleep;
 use std::time::Duration;
 
 mod cli;
+mod continuation;
 mod discord;
 mod extract;
 mod shakespeare;
@@ -82,7 +82,7 @@ fn run(mut args: Args) -> Result<(), String> {
     println!("{}", text.bright_purple());
 
     println!("====== Press Enter to start ======");
-    std::io::stdin().read(&mut []).unwrap();
+    io::stdin().read_line(&mut String::new()).unwrap();
 
     let mut displayname_cache = HashMap::new();
     let mut failed_messages: Vec<Message> = vec![];
@@ -206,19 +206,8 @@ fn handle_message(
                 .green()
                 .to_string(),
         );
-        let file = OpenOptions::new()
-            .write(true)
-            .append(true)
-            .create(true)
-            .open("discord_mass_redact.continue");
-
-        match file {
-            Err(e) => eprintln!("Couldn't open continuation file: {}", e),
-            Ok(mut f) => {
-                if let Err(e) = writeln!(f, "{}", message.id) {
-                    eprintln!("Couldn't write to continuation file: {}", e)
-                }
-            }
+        if let Some(path) = &args.continuation_file {
+            write_continuation_file(path, message.id);
         }
         return Response::ok();
     };

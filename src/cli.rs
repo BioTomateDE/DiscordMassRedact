@@ -45,7 +45,7 @@ pub struct Args {
     #[arg(short, long, value_parser = parse_date)]
     pub before: Option<DateTime<Utc>>,
 
-    /// A comma separated list of Channel or Guild IDs where messages shouldn't be deleted.
+    /// A comma separated list of Channel or Guild IDs where messages should not be deleted.
     #[arg(long, value_delimiter = ',')]
     pub preserve_list: Vec<u64>,
 

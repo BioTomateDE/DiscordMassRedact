@@ -1,4 +1,5 @@
 use crate::Args;
+use crate::continuation::parse_continuation_file;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use serde::{Deserialize, Deserializer};
 use serde_with::{DisplayFromStr, serde_as};
@@ -57,19 +58,19 @@ fn read_text_file(dir: &Path, file: &'static str) -> Result<String, String> {
     std::fs::read_to_string(&path).map_err(|e| format!("Could not read file {path:?}: {e}"))
 }
 
-fn is_blacklisted(preserve_list: &Vec<u64>, channel: &Channel) -> bool {
+fn is_blacklisted(preserve_list: &[u64], channel: &Channel) -> bool {
     if preserve_list.contains(&channel.id) {
         return true;
     }
-    if let Some(guild) = &channel.guild {
-        if preserve_list.contains(&guild.id) {
-            return true;
-        }
+    if let Some(guild) = &channel.guild
+        && preserve_list.contains(&guild.id)
+    {
+        return true;
     }
     false
 }
 
-fn is_whitelisted(delete_list: &Vec<u64>, channel: &Channel) -> bool {
+fn is_whitelisted(delete_list: &[u64], channel: &Channel) -> bool {
     // If the delete list is empty, messages in all channels are deleted.
     if delete_list.is_empty() {
         return true;
@@ -77,29 +78,26 @@ fn is_whitelisted(delete_list: &Vec<u64>, channel: &Channel) -> bool {
     if delete_list.contains(&channel.id) {
         return true;
     }
-    if let Some(guild) = &channel.guild {
-        if delete_list.contains(&guild.id) {
-            return true;
-        }
+    if let Some(guild) = &channel.guild
+        && delete_list.contains(&guild.id)
+    {
+        return true;
     }
     false
 }
 
 pub fn extract_messages(args: &Args) -> Result<Vec<(Channel, Vec<Message>)>, String> {
-    let finished: HashSet<u64> = match &args.continuation_file {
+    let already_processed: HashSet<u64> = match &args.continuation_file {
+        Some(path) => parse_continuation_file(path)?,
         None => HashSet::new(),
-        Some(x) => std::fs::read_to_string(x)
-            .map_err(|e| format!("Could not read continuation file: {e}"))?
-            .lines()
-            .map(|x| x.trim())
-            .filter(|x| !x.is_empty())
-            .map(|line| {
-                line.parse::<u64>()
-                    .map_err(|e| format!("Could not parse continuation file: {e}"))
-            })
-            .collect::<Result<HashSet<_>, _>>()?,
     };
-    println!("Found {} processed message;s", finished.len());
+
+    if !already_processed.is_empty() {
+        println!(
+            "Found {} already processed messages.",
+            already_processed.len(),
+        );
+    }
 
     let mut channels: Vec<(Channel, Vec<Message>)> = vec![];
 
@@ -148,22 +146,19 @@ pub fn extract_messages(args: &Args) -> Result<Vec<(Channel, Vec<Message>)>, Str
             continue;
         }
 
-        let messages: String = read_text_file(&path, "messages.json")?;
-        let messages: Vec<Message> = serde_json::from_str::<Vec<Message>>(&messages)
-            .map_err(|e| format!("Could not get JSON from messages file in {path:?}: {e}"))?
-            .into_iter()
-            .filter(|m| !finished.contains(&m.id))
-            .collect();
+        let raw_json: String = read_text_file(&path, "messages.json")?;
+        let messages: Vec<Message> = serde_json::from_str(&raw_json)
+            .map_err(|e| format!("Could not get JSON from messages file in {path:?}: {e}"))?;
 
-        let messages = messages
+        let messages: Vec<Message> = messages
             .into_iter()
             .filter(|m| {
-                let after_check = args.after.is_none_or(|after| m.timestamp >= after);
-                let before_check = args.before.is_none_or(|before| m.timestamp <= before);
-                let empty = m.content.is_empty() && m.attachments.is_empty();
-                after_check && before_check && !empty
+                args.after.is_none_or(|after| m.timestamp >= after)
+                    && args.before.is_none_or(|before| m.timestamp <= before)
+                    && !(m.content.is_empty() && m.attachments.is_empty())
+                    && !already_processed.contains(&m.id)
             })
-            .collect::<Vec<_>>();
+            .collect();
 
         channels.push((channel, messages));
     }
