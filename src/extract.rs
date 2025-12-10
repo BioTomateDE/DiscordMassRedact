@@ -2,6 +2,7 @@ use crate::Args;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use serde::{Deserialize, Deserializer};
 use serde_with::{DisplayFromStr, serde_as};
+use std::collections::HashSet;
 use std::fs::{DirEntry, ReadDir};
 use std::path::{Path, PathBuf};
 
@@ -85,6 +86,21 @@ fn is_whitelisted(delete_list: &Vec<u64>, channel: &Channel) -> bool {
 }
 
 pub fn extract_messages(args: &Args) -> Result<Vec<(Channel, Vec<Message>)>, String> {
+    let finished: HashSet<u64> = match &args.continuation_file {
+        None => HashSet::new(),
+        Some(x) => std::fs::read_to_string(x)
+            .map_err(|e| format!("Could not read continuation file: {e}"))?
+            .lines()
+            .map(|x| x.trim())
+            .filter(|x| !x.is_empty())
+            .map(|line| {
+                line.parse::<u64>()
+                    .map_err(|e| format!("Could not parse continuation file: {e}"))
+            })
+            .collect::<Result<HashSet<_>, _>>()?,
+    };
+    println!("Found {} processed message;s", finished.len());
+
     let mut channels: Vec<(Channel, Vec<Message>)> = vec![];
 
     // Get `messages` subfolder
@@ -133,14 +149,17 @@ pub fn extract_messages(args: &Args) -> Result<Vec<(Channel, Vec<Message>)>, Str
         }
 
         let messages: String = read_text_file(&path, "messages.json")?;
-        let messages: Vec<Message> = serde_json::from_str(&messages)
-            .map_err(|e| format!("Could not get JSON from messages file in {path:?}: {e}"))?;
+        let messages: Vec<Message> = serde_json::from_str::<Vec<Message>>(&messages)
+            .map_err(|e| format!("Could not get JSON from messages file in {path:?}: {e}"))?
+            .into_iter()
+            .filter(|m| !finished.contains(&m.id))
+            .collect();
 
         let messages = messages
             .into_iter()
             .filter(|m| {
-                let after_check = args.after.map_or(true, |after| m.timestamp >= after);
-                let before_check = args.before.map_or(true, |before| m.timestamp <= before);
+                let after_check = args.after.is_none_or(|after| m.timestamp >= after);
+                let before_check = args.before.is_none_or(|before| m.timestamp <= before);
                 let empty = m.content.is_empty() && m.attachments.is_empty();
                 after_check && before_check && !empty
             })

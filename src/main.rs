@@ -7,7 +7,9 @@ use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::blocking::Client;
 use std::collections::HashMap;
+use std::fs::OpenOptions;
 use std::io::Read;
+use std::io::Write;
 use std::sync::LazyLock;
 use std::thread::sleep;
 use std::time::Duration;
@@ -46,12 +48,11 @@ fn main() {
 fn run(mut args: Args) -> Result<(), String> {
     if let Some(before) = args.before
         && let Some(after) = args.after
+        && after > before
     {
-        if after > before {
-            return Err(format!(
-                "The `after` timestamp {after} is after the `before` timestamp {before}"
-            ));
-        }
+        return Err(format!(
+            "The `after` timestamp {after} is after the `before` timestamp {before}"
+        ));
     }
 
     if let Some(file) = &args.preserve_list_file {
@@ -86,7 +87,10 @@ fn run(mut args: Args) -> Result<(), String> {
     let mut displayname_cache = HashMap::new();
     let mut failed_messages: Vec<Message> = vec![];
     let bar = ProgressBar::new(message_count as u64);
-    bar.set_style(ProgressStyle::with_template("[{eta}] {wide_bar} {pos}/{len} ({percent_precise}%)").unwrap());
+    bar.set_style(
+        ProgressStyle::with_template("[{eta}] {wide_bar} {pos}/{len} ({percent_precise}%)")
+            .unwrap(),
+    );
 
     for (channel, messages) in channels {
         for message in messages {
@@ -202,12 +206,30 @@ fn handle_message(
                 .green()
                 .to_string(),
         );
+        let file = OpenOptions::new()
+            .write(true)
+            .append(true)
+            .create(true)
+            .open("discord_mass_redact.continue");
+
+        match file {
+            Err(e) => eprintln!("Couldn't open continuation file: {}", e),
+            Ok(mut f) => {
+                if let Err(e) = writeln!(f, "{}", message.id) {
+                    eprintln!("Couldn't write to continuation file: {}", e)
+                }
+            }
+        }
         return Response::ok();
     };
 
     match error {
         DiscordError::RateLimited(retry_after) => {
-            bar.println(format!("Retrying after {retry_after:.2}s").yellow().to_string());
+            bar.println(
+                format!("Retrying after {retry_after:.2}s")
+                    .yellow()
+                    .to_string(),
+            );
             sleep(Duration::from_secs_f64(retry_after));
             Response {
                 success: false,
