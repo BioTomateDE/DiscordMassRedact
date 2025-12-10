@@ -61,6 +61,9 @@ pub struct Args {
     /// A path to a file containing a newline separated whitelist (see --delete-list).
     #[arg(long)]
     pub delete_list_file: Option<PathBuf>,
+
+    #[arg(long)]
+    pub continuation_file: Option<PathBuf>,
 }
 
 fn parse_date(s: &str) -> Result<DateTime<Utc>, String> {
